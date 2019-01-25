@@ -20,7 +20,7 @@ import android.util.AttributeSet;
 import android.view.Gravity;
 import android.view.View;
 
-import com.taobao.android.luaview.R;
+import cn.com.videopls.pub.R;
 
 /**
  * Delegate that actually does the foreground things, so that the logic can be shared between views

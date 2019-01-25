@@ -22,6 +22,8 @@ android {
     buildTypes {
         lintOptions { abortOnError false }
     }
+    enforceUniquePackageName = false
+    packageBuildConfig(false)
 
     sourceSets {
         main {

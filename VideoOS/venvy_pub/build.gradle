@@ -5,7 +5,7 @@ android {
 
     defaultConfig {
         minSdkVersion 16
-        targetSdkVersion 26
+        targetSdkVersion 25
         javaCompileOptions {
             annotationProcessorOptions {
                 arguments = [moduleName: project.getName()]
@@ -41,6 +41,8 @@ android {
         abortOnError false
         checkReleaseBuilds false
     }
+    enforceUniquePackageName = false
+    packageBuildConfig(false)
 
     sourceSets {
         main {
