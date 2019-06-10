@@ -3,7 +3,7 @@ require "os_config"
 require "os_string"
 require "os_constant"
 require "os_util"
-
+require "os_track"
 wedge = object:new()
 local adTypeName = "wedge"
 local scale = getScale()
@@ -120,7 +120,7 @@ local function wedgeLinkUrl(data)
         return nil
     end
     local link = dataTable.linkUrl
-    if (link ~= nil and string.match(tostring(link), "http") == "http") then
+    if (link ~= nil and string.len(link) > 0) then
         return link
     else
         return nil
@@ -181,7 +181,7 @@ local function getLandscapeLocation(data) --获取竖屏位置
     if (wedge.landscapeWidth ~= nil and wedge.landscapeHeight ~= nil and wedge.landscapeX ~= nil and wedge.landscapeY ~= nil) then
         return wedge.landscapeX, wedge.landscapeY, wedge.landscapeWidth, wedge.landscapeHeight
     end
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     local width = 0
     local height = 0
     local x = 0
@@ -220,7 +220,7 @@ local function getPortraitLocation(data) --获取竖屏位置
     if (wedge.portraitWidth ~= nil and wedge.portraitHeight ~= nil and wedge.portraitX ~= nil and wedge.portraitY ~= nil) then
         return wedge.portraitX, wedge.portraitY, wedge.portraitWidth, wedge.portraitHeight
     end
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     local videoWidth, videoHight, originY = Native:getVideoSize(0)
     --忽略originY，已经设置luaview originY
     originY = 0
@@ -408,7 +408,7 @@ local function setLuaViewSize(luaview, isPortrait) --设置当前容器大小
     if (luaview == nil) then
         return
     end
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     if (isPortrait) then
         local videoWidth, videoHight, y = Native:getVideoSize(0)
         if System.android() then
@@ -741,7 +741,7 @@ local function registerWindow()
                 return
             end
             local hWidth = nativeWindow:width()
-            local screenWidth, screenHeight = System.screenSize()
+            local screenWidth, screenHeight = Native:getVideoSize(2)
             if (hWidth <= math.max(screenWidth, screenHeight)) then
                 return
             end
@@ -1024,6 +1024,16 @@ function createLoadingView()
 end
 
 local function onCreate(data)
+    local showLinkUrl = getHotspotExposureTrackLink(data, 1)
+    if (showLinkUrl ~= nil) then
+        Native:get(showLinkUrl)
+    end
+    if (wedge.launchPlanId ~= nil) then
+        osTrack(wedge.launchPlanId, 1, 2)
+        if(wedgeLinkUrl(data)~=nil)then
+            osTrack(wedge.launchPlanId, 2, 2)
+        end
+    end
     wedge.luaView = createParent(Native:isPortraitScreen())
     wedge.mediaPlayer = createMediaPlay(data, Native:isPortraitScreen())
     wedge.backView = createBack(data, Native:isPortraitScreen())
@@ -1055,6 +1065,9 @@ local function onCreate(data)
         local clickLinkUrl = getHotspotClickTrackLink(wedge.data, 1)
         if (clickLinkUrl ~= nil) then
             Native:get(clickLinkUrl)
+        end
+        if (wedge.launchPlanId ~= nil) then
+            osTrack(wedge.launchPlanId, 3, 2)
         end
         local adId = wedgeID(wedge.data)
         local adType = "os_wedge.lua"
@@ -1122,13 +1135,11 @@ function show(args)
             return
         end
     end
-    local showLinkUrl = getHotspotExposureTrackLink(dataTable, 1)
-    if (showLinkUrl ~= nil) then
-        Native:get(showLinkUrl)
-    end
     setDefaultValue(dataTable)
     wedgeConfig(dataTable)
     wedge.id = dataTable.id
+    wedge.launchPlanId = dataTable.launchPlanId
+
     Native:widgetEvent(eventTypeShow, wedge.id, adTypeName, actionTypePauseVideo, "")
     Native:saveCacheData(wedge.id, tostring(eventTypeShow))
     wedge.data = dataTable
@@ -1139,10 +1150,10 @@ function show(args)
         onStart = function(url)
             --开始播放
             wedge.voice = wedge.mediaPlayer:voice()
-            if (wedge.voice <= 0) then
-                wedge.guideVoiceImage:image(Data(OS_ICON_NO_VOICE))
-            else
+            if (wedge.voice > 0) then
                 wedge.guideVoiceImage:image(Data(OS_ICON_VOICE))
+            else
+                wedge.guideVoiceImage:image(Data(OS_ICON_NO_VOICE))
             end
             wedge.mediaPlayPaused = false
             local videoDuration = getVideoDuration(dataTable)
@@ -1185,12 +1196,10 @@ function show(args)
             if (wedge.guideVoiceImage == nil) then
                 return
             end
-            if (volme <= 0) then
-                --                wedge.mediaPlayer:voice(wedge.voice)
-                wedge.guideVoiceImage:image(Data(OS_ICON_NO_VOICE))
-            else
-                --                wedge.mediaPlayer:voice(0)
+            if (volme > 0) then
                 wedge.guideVoiceImage:image(Data(OS_ICON_VOICE))
+            else
+                wedge.guideVoiceImage:image(Data(OS_ICON_NO_VOICE))
             end
         end
     })

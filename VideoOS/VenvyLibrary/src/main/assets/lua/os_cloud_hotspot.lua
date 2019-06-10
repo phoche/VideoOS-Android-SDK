@@ -3,6 +3,7 @@ require "os_config"
 require "os_string"
 require "os_constant"
 require "os_util"
+require "os_track"
 cloud = object:new()
 local adTypeName = "cloud"
 local scale = getScale()
@@ -55,7 +56,7 @@ local function getLinkUrl(data)
         return nil
     end
     local link = dataTable.linkUrl
-    if (link ~= nil and string.match(tostring(link), "http") == "http") then
+    if (link ~= nil and string.len(link) > 0) then
         return link
     else
         return nil
@@ -113,10 +114,13 @@ local function setLuaViewSize(luaview, isPortrait) --设置当前容器大小
     if (luaview == nil) then
         return
     end
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     if (isPortrait) then
-        local videoWidth, videoHight = Native:getVideoSize(0)
-        luaview:frame(0, 0, math.min(screenWidth, screenHeight), videoHight)
+        local videoWidth, videoHight, y = Native:getVideoSize(0)
+        if System.android() then
+            y = 0.0
+        end
+        luaview:frame(0, y, math.min(screenWidth, screenHeight), videoHight)
     else
         luaview:frame(0, 0, math.max(screenWidth, screenHeight), math.min(screenWidth, screenHeight))
     end
@@ -127,7 +131,7 @@ local function checkShowPosition(x, y, w, h, data, isPortrait)
     if (isPortrait) then
         maxWidth, maxHeight = Native:getVideoSize(0)
     else
-        local screenWidth, screenHeight = System.screenSize()
+        local screenWidth, screenHeight = Native:getVideoSize(2)
         maxWidth = math.max(screenWidth, screenHeight)
         maxHeight = math.min(screenWidth, screenHeight)
     end
@@ -175,7 +179,7 @@ local function getLandscapeLocation(data) --获取竖屏位置
     if (cloud.landscapeWidth ~= nil and cloud.landscapeHeight ~= nil and cloud.landscapeX ~= nil and cloud.landscapeY ~= nil) then
         return cloud.landscapeX, cloud.landscapeY, cloud.landscapeWidth, cloud.landscapeHeight
     end
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     local width = 0
     local height = 0
     local x = 0
@@ -221,7 +225,7 @@ end
 local function setDefaultValue(data) --设置默认大小值
     if (data == nil) then
     end
-    data.data.width = 0.12 --横屏宽最大值 160 高120 (分辨率750*1334)
+    data.data.width = 0.375 --横屏宽最大值 500 高400 (分辨率750*1334)
     data.data.ratio = 4.0 / 3.0 -- 160 / 120
     data.data.positionX = 0.037
     data.data.positionY = 0.751
@@ -238,7 +242,7 @@ local function getPortraitLocation(data) --获取竖屏位置
     if (cloud.portraitWidth ~= nil and cloud.portraitHeight ~= nil and cloud.portraitX ~= nil and cloud.portraitY ~= nil) then
         return cloud.portraitX, cloud.portraitY, cloud.portraitWidth, cloud.portraitHeight
     end
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     local videoWidth, videoHight = Native:getVideoSize(0)
     local sacleW = math.min(screenWidth, screenHeight) / math.max(screenWidth, screenHeight)
     local sacleH = videoHight / math.min(screenWidth, screenHeight)
@@ -362,7 +366,7 @@ local function rotationScreen(isPortrait)
         return
     end
     needShowOnPortrait(isPortrait)
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     local tempWidthSide, tempHeightSide
     if (isPortrait) then
         if (not cloud.needShowOnPortrait) then
@@ -501,6 +505,16 @@ local function createCloseButton(data, isPortrait)
 end
 
 local function onCreate(data)
+    local showLinkUrl = getHotspotExposureTrackLink(data, 1)
+    if (showLinkUrl ~= nil) then
+        Native:get(showLinkUrl)
+    end
+    if (cloud.launchPlanId ~= nil) then
+        osTrack(cloud.launchPlanId, 1, 2)
+        if (getLinkUrl(data) ~= nil) then
+            osTrack(cloud.launchPlanId, 2, 2)
+        end
+    end
     cloud.needShowOnPortrait = isNeedShowOnPortrait(data)
     local isPortrait = Native:isPortraitScreen()
     cloud.luaView = createParent(isPortrait)
@@ -539,6 +553,9 @@ local function onCreate(data)
         if (clickLinkUrl ~= nil) then
             Native:get(clickLinkUrl)
         end
+        if (cloud.launchPlanId ~= nil) then
+            osTrack(cloud.launchPlanId, 3, 2)
+        end
     end)
 end
 
@@ -550,12 +567,10 @@ function show(args)
     if (dataTable == nil) then
         return
     end
-    local showLinkUrl = getHotspotExposureTrackLink(dataTable, 1)
-    if (showLinkUrl ~= nil) then
-        Native:get(showLinkUrl)
-    end
-    setDefaultValue(dataTable)
     cloud.id = dataTable.id
+    cloud.launchPlanId = dataTable.launchPlanId
+
+    setDefaultValue(dataTable)
     Native:widgetEvent(eventTypeShow, cloud.id, adTypeName, actionTypeNone, "") --todo 修改参数为table
     Native:saveCacheData(cloud.id, tostring(eventTypeShow))
     cloud.data = dataTable

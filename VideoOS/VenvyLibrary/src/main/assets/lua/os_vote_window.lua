@@ -9,6 +9,7 @@ require "os_config"
 require "os_string"
 require "os_constant"
 require "os_util"
+require "os_track"
 voteWindow = object:new()
 local adTypeName = "voteWindow"
 local scale = getScale()
@@ -114,7 +115,7 @@ local function getUserVoteInfo(callback)
     --     print("==[LuaView] "..userInfoTable.uid)
     -- print("[LuaView] "..OS_HTTP_GET_MOBILE_QUERY)
     -- print("[LuaView] "..Native:aesEncrypt(paramDataString, OS_HTTP_PUBLIC_KEY, OS_HTTP_PUBLIC_KEY))
-    Native:post(OS_HTTP_GET_MOBILE_QUERY, {
+    voteWindow.request:post(OS_HTTP_GET_MOBILE_QUERY, {
         bu_id = buId,
         device_type = deviceType,
         data = Native:aesEncrypt(paramDataString, OS_HTTP_PUBLIC_KEY, OS_HTTP_PUBLIC_KEY)
@@ -138,6 +139,13 @@ local function getUserVoteInfo(callback)
         end
         local dataTable = response.businessInfo
         if (dataTable == nil) then
+            local showLinkUrl = getHotspotExposureTrackLink(voteWindow.data, 1)
+            if (showLinkUrl ~= nil) then
+                Native:get(showLinkUrl)
+            end
+            if (voteWindow.launchPlanId ~= nil) then
+                osTrack(voteWindow.launchPlanId, 2, 1)
+            end
             if callback ~= nil then
                 callback()
             end
@@ -146,8 +154,16 @@ local function getUserVoteInfo(callback)
         if dataTable.isVote == true then
             voteWindow.section = dataTable.vote
             showVoteResult()
+        else
+            local showLinkUrl = getHotspotExposureTrackLink(voteWindow.data, 1)
+            if (showLinkUrl ~= nil) then
+                Native:get(showLinkUrl)
+            end
+            if (voteWindow.launchPlanId ~= nil) then
+                osTrack(voteWindow.launchPlanId, 2, 1)
+            end
         end
-    end)
+    end, voteWindow.luaview)
 end
 
 local function postUserVoteInfo(voteIndex)
@@ -171,7 +187,7 @@ local function postUserVoteInfo(voteIndex)
     print("[LuaView] " .. paramDataString)
     print("[LuaView] " .. OS_HTTP_POST_MOBILE_QUERY)
     print("[LuaView] " .. Native:aesEncrypt(paramDataString, OS_HTTP_PUBLIC_KEY, OS_HTTP_PUBLIC_KEY))
-    Native:post(OS_HTTP_POST_MOBILE_QUERY, {
+    voteWindow.request:post(OS_HTTP_POST_MOBILE_QUERY, {
         bu_id = buId,
         device_type = deviceType,
         data = Native:aesEncrypt(paramDataString, OS_HTTP_PUBLIC_KEY, OS_HTTP_PUBLIC_KEY)
@@ -191,7 +207,7 @@ local function postUserVoteInfo(voteIndex)
         if (dataTable == nil) then
             return
         end
-    end)
+    end, voteWindow.luaview)
 end
 
 local function getVoteCountInfo()
@@ -224,7 +240,7 @@ local function getVoteCountInfo()
     print("[LuaView] " .. paramDataString)
     print("[LuaView] " .. OS_HTTP_GET_COMMON_QUERY)
     --print("[LuaView] "..Native:aesEncrypt(paramDataString, OS_HTTP_PUBLIC_KEY, OS_HTTP_PUBLIC_KEY))
-    Native:post(OS_HTTP_GET_COMMON_QUERY, {
+    voteWindow.request:post(OS_HTTP_GET_COMMON_QUERY, {
         bu_id = buId,
         device_type = deviceType,
         data = Native:aesEncrypt(paramDataString, OS_HTTP_PUBLIC_KEY, OS_HTTP_PUBLIC_KEY)
@@ -268,6 +284,9 @@ function showVoteResult(index)
     if (clickLinkUrl ~= nil) then
         Native:get(clickLinkUrl)
     end
+    if (voteWindow.launchPlanId ~= nil) then
+        osTrack(voteWindow.launchPlanId, 3, 1)
+    end
     if voteWindow.voteCount == nil then
         voteWindow.isVoted = true
         voteWindow.needShowVoteResult = true
@@ -306,7 +325,7 @@ local function setLuaViewSize(luaview, isPortrait) --设置当前容器大小
     if (luaview == nil) then
         return
     end
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     if (isPortrait) then
         luaview:frame(0, 0, math.min(screenWidth, screenHeight), math.max(screenWidth, screenHeight))
         luaview:align(Align.BOTTOM)
@@ -320,7 +339,7 @@ local function setVoteViewSize(data, voteWindowView, voteWindowContentView, isPo
     if (data == nil or voteWindowView == nil or voteWindowContentView == nil) then
         return
     end
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     if (isPortrait) then
         voteWindowView:frame(0, 0, voteWindow.portraitWidth, voteWindow.portraitHeight)
         -- voteWindowView:align(Align.BOTTOM)
@@ -347,7 +366,7 @@ local function setVoteLoadingViewSize(data, voteLoadingView, voteLoading, isPort
     if (data == nil or voteLoadingView == nil or voteLoading == nil) then
         return
     end
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     if (isPortrait) then
         voteLoadingView:frame(0, 0, voteWindow.portraitWidth, voteWindow.portraitHeight)
     else
@@ -362,7 +381,7 @@ local function setVoteErrorViewSize(data, voteErrorView, voteErrorMessage, isPor
     -- if (data == nil or voteErrorView == nil or voteErrorMessage == nil) then
     --     return
     -- end
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     if (isPortrait) then
         voteErrorView:frame(0, 0, voteWindow.portraitWidth, voteWindow.portraitHeight)
         voteErrorMessage:frame(0, voteWindow.portraitHeight * 0.7, math.min(screenWidth, screenHeight), 40)
@@ -404,7 +423,7 @@ local function setVoteScrollviewSize(data, voteWindowScrollview, isPortrait) --�
         return
     end
     if (isPortrait) then
-        local screenWidth, screenHeight = System.screenSize()
+        local screenWidth, screenHeight = Native:getVideoSize(2)
         voteWindowScrollview:frame(0, voteWindow.portraitHeight * 0.206, voteWindow.portraitWidth, voteWindow.portraitHeight * 0.794)
         voteWindowScrollview:miniSpacing(15 * scale)
     else
@@ -492,7 +511,7 @@ local function getStateCellSize(data)
     local isPortrait = Native:isPortraitScreen()
     if (isPortrait) then
         local textWidth, textHeight = Native:stringSizeWithWidth(voteRule, 334 * scale, 14)
-        local screenWidth, screenHeight = System.screenSize()
+        local screenWidth, screenHeight = Native:getVideoSize(2)
         return math.min(screenWidth, screenHeight), screenHeight + 30 * scale
     else
         local textWidth, textHeight = Native:stringSizeWithWidth(voteRule, 160 * scale, 12)
@@ -673,7 +692,7 @@ local function createStateCellLandscapeSize(data, cell, section, row)
 end
 
 local function createCellPortraitSize(data, cell, section, row)
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     cell.rootView:frame(0, 0, math.min(screenWidth, screenHeight), 75 * scale)
     cell.iconLayout:frame(22 * scale, 7.5 * scale, 60 * scale, 60 * scale)
     cell.iconView:frame(scale, scale, 58 * scale, 58 * scale)
@@ -784,7 +803,7 @@ local function createStateCellPortraitSize(data, cell, section, row)
     if (System.android()) then
         cell.stateView:margin(21 * scale, 0, 21 * scale, 15 * scale)
     else
-        local screenWidth, screenHeight = System.screenSize()
+        local screenWidth, screenHeight = Native:getVideoSize(2)
         local cellWidth = math.min(screenWidth, screenHeight)
         local textWidth, textHeight = Native:stringSizeWithWidth(voteRule, cellWidth - 21 * scale * 2 - 2 * scale, 14)
         cell.stateView:frame(21 * scale, 15 * scale, cellWidth - 21 * scale * 2, textHeight + 5 * scale)
@@ -920,7 +939,7 @@ local function createVoteScrollview(data, isPortrait)
                 Size = function(section, row)
                     local isPortrait = Native:isPortraitScreen()
                     if (isPortrait) then
-                        local screenWidth, screenHeight = System.screenSize()
+                        local screenWidth, screenHeight = Native:getVideoSize(2)
                         return math.min(screenWidth, screenHeight), 75 * scale
                     else
                         return 200 * scale, 50 * scale
@@ -963,7 +982,7 @@ local function createVoteScrollview(data, isPortrait)
                         return 0, 0
                     end
                     if (isPortrait) then
-                        local screenWidth, screenHeight = System.screenSize()
+                        local screenWidth, screenHeight = Native:getVideoSize(2)
                         local cellWidth = math.min(screenWidth, screenHeight)
                         local textWidth, textHeight = Native:stringSizeWithWidth(voteRule, cellWidth - 42 * scale, 14)
                         return cellWidth, textHeight + 5 * scale + 30 * scale
@@ -1024,7 +1043,7 @@ local function onCreate(data)
     voteWindow.voteWindowContentView:addView(voteWindow.voteWindowScrollview)
     voteWindow.voteWindowView:addView(voteWindow.voteLoadingView)
     voteWindow.voteWindowView:addView(voteWindow.voteErrorView)
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     if (isPortrait) then
         if System.ios() then
             voteWindow.voteWindowView:y(math.max(screenWidth, screenHeight))
@@ -1107,7 +1126,7 @@ local function setConfig(data)
     end
     voteWindow.data = data
     voteWindow.isVoted = false
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     local videoWidth, videoHight, marginTop = Native:getVideoSize(0)
     voteWindow.portraitWidth = math.min(screenWidth, screenHeight) --宽
     voteWindow.portraitHeight = math.max(screenWidth, screenHeight) - videoHight - marginTop --高
@@ -1129,6 +1148,11 @@ function show(args)
     print("LuaView os vote window" .. Native:tableToJson(args))
     voteWindow.loadingCount = 0
     voteWindow.id = "os_vote_window" .. tostring(args.data.id)
+    voteWindow.launchPlanId = args.data.launchPlanId
+    voteWindow.request = HttpRequest()
+    if (voteWindow.launchPlanId ~= nil) then
+        osTrack(voteWindow.launchPlanId, 1, 1)
+    end
     setConfig(args.data)
     onCreate(args.data)
 
@@ -1159,6 +1183,9 @@ function show(args)
             local showLinkUrl = getHotspotExposureTrackLink(args.data, 1)
             if (showLinkUrl ~= nil) then
                 Native:get(showLinkUrl)
+            end
+            if (voteWindow.launchPlanId ~= nil) then
+                osTrack(voteWindow.launchPlanId, 2, 1)
             end
         end
     else

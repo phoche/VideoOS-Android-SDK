@@ -9,6 +9,7 @@ require "os_config"
 require "os_string"
 require "os_constant"
 require "os_util"
+require "os_track"
 card = object:new()
 local adTypeName = "card"
 local scale = getScale()
@@ -90,7 +91,7 @@ local function getPortraitLocation(data)
     if (card.portraitWidth ~= nil and card.portraitHeight ~= nil and card.portraitX ~= nil and card.portraitY ~= nil) then
         return card.portraitX, card.portraitY, card.portraitWidth, card.portraitHeight
     end
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     local videoWidth, videoHight = Native:getVideoSize(0)
     local sacleW = math.min(screenWidth, screenHeight) / math.max(screenWidth, screenHeight)
     local sacleH = videoHight / math.min(screenWidth, screenHeight)
@@ -133,7 +134,7 @@ local function getLandscapeLocation(data)
     if (card.landscapeWidth ~= nil and card.landscapeHeight ~= nil and card.landscapeX ~= nil and card.landscapeY ~= nil) then
         return card.landscapeX, card.landscapeY, card.landscapeWidth, card.landscapeHeight
     end
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     local width = 0
     local height = 0
     local x = 0
@@ -173,10 +174,13 @@ local function setLuaViewSize(luaview, isPortrait) --设置当前容器大小
     if (luaview == nil) then
         return
     end
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     if (isPortrait) then
-        local videoWidth, videoHight = Native:getVideoSize(0)
-        luaview:frame(0, 0, math.min(screenWidth, screenHeight), videoHight)
+        local videoWidth, videoHight, y = Native:getVideoSize(0)
+        if System.android() then
+            y = 0.0
+        end
+        luaview:frame(0, y, math.min(screenWidth, screenHeight), videoHight)
     else
         luaview:frame(0, 0, math.max(screenWidth, screenHeight), math.min(screenWidth, screenHeight))
     end
@@ -261,13 +265,21 @@ local function setCardFlexLayoutSize(data, cardFlexView, cardFlexLabel, isPortra
         y = card.portraitHeight * 0.364
         w = card.portraitWidth * 0.762
         h = card.portraitHeight * 0.387
-        cardFlexLabel:textSize(8)
+        if System.ios() then
+            cardFlexLabel:textSize(8)
+        else
+            cardFlexLabel:textSize(7)
+        end
     else
         x = card.landscapeWidth * 0.239
         y = card.landscapeHeight * 0.364
         w = card.landscapeWidth * 0.762
         h = card.landscapeHeight * 0.387
-        cardFlexLabel:textSize(11)
+        if System.ios() then
+            cardFlexLabel:textSize(13)
+        else
+            cardFlexLabel:textSize(12)
+        end
     end
     cardFlexLabel:frame(w * 0.4, 0, w, h)
     local corner = h / 2
@@ -438,6 +450,15 @@ local function registerWindow()
 end
 
 local function onCreate(data)
+    local showLinkUrl = getHotspotExposureTrackLink(card.data, card.hotspotOrder)
+    if (showLinkUrl ~= nil) then
+        Native:get(showLinkUrl)
+    end
+    if (card.launchPlanId ~= nil) then
+        osTrack(card.launchPlanId, 1, 2)
+        osTrack(card.launchPlanId, 2, 2)
+    end
+
     configSize(data)
     local isPortrait = Native:isPortraitScreen()
     card.luaview = createLuaView(isPortrait)
@@ -478,18 +499,24 @@ local function onCreate(data)
     card.cardImageLayout:onClick(function()
         Native:widgetEvent(eventTypeClick, card.id, adTypeName, actionTypeNone, "")
         closeView()
-        local clickLinkUrl = getHotspotClickTrackLink(data, 1)
+        local clickLinkUrl = getHotspotClickTrackLink(data, card.hotspotOrder)
         if (clickLinkUrl ~= nil) then
             Native:get(clickLinkUrl)
+        end
+        if (card.launchPlanId ~= nil) then
+            osTrack(card.launchPlanId, 3, 2)
         end
         Native:sendAction(Native:base64Encode("LuaView://defaultLuaView?template=" .. "os_card_window.lua" .. "&id=" .. "os_card_window" .. tostring(card.id) .. tostring(card.hotspotOrder) .. "&priority=" .. tostring(osInfoViewPriority)), data)
     end)
     card.cardFlexView:onClick(function()
         Native:widgetEvent(eventTypeClick, card.id, adTypeName, actionTypeNone, "")
         closeView()
-        local clickLinkUrl = getHotspotClickTrackLink(data, 1)
+        local clickLinkUrl = getHotspotClickTrackLink(data, card.hotspotOrder)
         if (clickLinkUrl ~= nil) then
             Native:get(clickLinkUrl)
+        end
+        if (card.launchPlanId ~= nil) then
+            osTrack(card.launchPlanId, 3, 2)
         end
         Native:sendAction(Native:base64Encode("LuaView://defaultLuaView?template=" .. "os_card_window.lua" .. "&id=" .. "os_card_window" .. tostring(card.id) .. tostring(card.hotspotOrder) .. "&priority=" .. tostring(osInfoViewPriority)), data)
     end)
@@ -564,7 +591,7 @@ function getUserCardInfo(callback)
     -- print("[LuaView] "..paramDataString)
     -- print("[LuaView] "..OS_HTTP_GET_MOBILE_QUERY)
     -- print("[LuaView] "..Native:aesEncrypt(paramDataString, OS_HTTP_PUBLIC_KEY, OS_HTTP_PUBLIC_KEY))
-    local requestId = Native:post(OS_HTTP_GET_MOBILE_QUERY, {
+    local requestId = card.request:post(OS_HTTP_GET_MOBILE_QUERY, {
         bu_id = buId,
         device_type = deviceType,
         data = Native:aesEncrypt(paramDataString, OS_HTTP_PUBLIC_KEY, OS_HTTP_PUBLIC_KEY)
@@ -594,7 +621,7 @@ function getUserCardInfo(callback)
         if callback ~= nil then
             callback(dataTable)
         end
-    end)
+    end, card.luaview)
     table.insert(card.requestIds, requestId)
 end
 
@@ -603,13 +630,19 @@ function show(args)
         return
     end
     card.data = args.data
-
-    card.id = args.data.id
+    card.launchPlanId = card.data.launchPlanId
+    card.id = card.data.id
+    card.request = HttpRequest()
     print("LuaView card id " .. card.id)
-    local showLinkUrl = getHotspotExposureTrackLink(card.data, 1)
-    if (showLinkUrl ~= nil) then
-        Native:get(showLinkUrl)
+    if (card.hotspotOrder == nil) then
+        local hotspotOrder = card.data.hotspotOrder
+        if (hotspotOrder == nil) then
+            hotspotOrder = 0
+        end
+        hotspotOrder = hotspotOrder + 1
+        card.hotspotOrder = hotspotOrder
     end
+
     getUserCardInfo(function(dataTable)
         if dataTable ~= nil then
             if dataTable.collectStatus ~= collectStatusGet then

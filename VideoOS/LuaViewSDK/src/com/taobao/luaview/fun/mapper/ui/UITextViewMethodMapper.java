@@ -14,6 +14,7 @@ import com.taobao.luaview.fun.mapper.LuaViewApi;
 import com.taobao.luaview.fun.mapper.LuaViewLib;
 import com.taobao.luaview.userdata.constants.UDEllipsize;
 import com.taobao.luaview.userdata.ui.UDTextView;
+import com.taobao.luaview.util.AndroidUtil;
 import com.taobao.luaview.util.ColorUtil;
 import com.taobao.luaview.util.DimenUtil;
 import com.taobao.luaview.util.LuaUtil;
@@ -44,7 +45,8 @@ public class UITextViewMethodMapper<U extends UDTextView> extends UIViewMethodMa
             "ellipsize",//12
             "adjustTextSize",//13
             "adjustFontSize",//14
-            "textShadow"//15
+            "textShadow",//15
+            "textBold"//16
     };
 
     @Override
@@ -88,6 +90,8 @@ public class UITextViewMethodMapper<U extends UDTextView> extends UIViewMethodMa
                 return adjustFontSize(target, varargs);
             case 15:
                 return textShadow(target, varargs);
+            case 16:
+                return setfontBold(target, varargs);
         }
         return super.invoke(code, target, varargs);
     }
@@ -164,7 +168,12 @@ public class UITextViewMethodMapper<U extends UDTextView> extends UIViewMethodMa
 
     public LuaValue setTextSize(U view, Varargs varargs) {
         final float fontSize = (float) varargs.optdouble(2, 12.0);//TODO 这里需要转sp么？
-        return view.setTextSize(fontSize);
+        float density = AndroidUtil.getDensity(view.getContext());
+        if (density < 3) {
+            return view.setTextSize(fontSize - 2);
+        } else {
+            return view.setTextSize(fontSize);
+        }
     }
 
     public LuaValue getTextSize(U view, Varargs varargs) {
@@ -204,6 +213,16 @@ public class UITextViewMethodMapper<U extends UDTextView> extends UIViewMethodMa
         } else {
             return getFontName(view, varargs);
         }
+    }
+
+    /***
+     * 设置字体加粗
+     * @param view
+     * @param varargs
+     * @return
+     */
+    public LuaValue setfontBold(U view, Varargs varargs) {
+        return view.setfontBold();
     }
 
     public LuaValue setFontName(U view, Varargs varargs) {

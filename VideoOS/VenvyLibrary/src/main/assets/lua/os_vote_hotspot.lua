@@ -9,6 +9,7 @@ require "os_config"
 require "os_string"
 require "os_constant"
 require "os_util"
+require "os_track"
 vote = object:new()
 local adTypeName = "vote"
 local scale = getScale()
@@ -83,7 +84,7 @@ local function getVoteCountInfo()
     -- print("[LuaView] "..paramDataString)
     -- print("[LuaView] "..OS_HTTP_GET_COMMON_QUERY)
     -- print("[LuaView] "..Native:aesEncrypt(paramDataString, OS_HTTP_PUBLIC_KEY, OS_HTTP_PUBLIC_KEY))
-    Native:post(OS_HTTP_GET_COMMON_QUERY, {
+    vote.request:post(OS_HTTP_GET_COMMON_QUERY, {
         bu_id = buId,
         device_type = deviceType,
         data = Native:aesEncrypt(paramDataString, OS_HTTP_PUBLIC_KEY, OS_HTTP_PUBLIC_KEY)
@@ -104,7 +105,7 @@ local function getVoteCountInfo()
             return
         end
         vote.data.data.voteCount = dataTable
-    end)
+    end, vote.luaview)
 end
 
 local function getUserVoteInfo()
@@ -123,7 +124,7 @@ local function getUserVoteInfo()
     -- print("[LuaView] "..paramDataString)
     -- print("[LuaView] "..OS_HTTP_GET_MOBILE_QUERY)
     -- print("[LuaView] "..Native:aesEncrypt(paramDataString, OS_HTTP_PUBLIC_KEY, OS_HTTP_PUBLIC_KEY))
-    Native:post(OS_HTTP_GET_MOBILE_QUERY, {
+    vote.request:post(OS_HTTP_GET_MOBILE_QUERY, {
         bu_id = buId,
         device_type = deviceType,
         data = Native:aesEncrypt(paramDataString, OS_HTTP_PUBLIC_KEY, OS_HTTP_PUBLIC_KEY)
@@ -144,7 +145,7 @@ local function getUserVoteInfo()
             return
         end
         vote.data.data.userVote = dataTable
-    end)
+    end, vote.luaview)
 end
 
 --获取竖屏位置 ratio=3.762  dataTable.width=0.237  positionX=0.745  positionY=0.613
@@ -159,7 +160,7 @@ local function getPortraitLocation(data)
     if (vote.portraitWidth ~= nil and vote.portraitHeight ~= nil and vote.portraitX ~= nil and vote.portraitY ~= nil) then
         return vote.portraitX, vote.portraitY, vote.portraitWidth, vote.portraitHeight
     end
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     local videoWidth, videoHight = Native:getVideoSize(0)
     local sacleW = math.min(screenWidth, screenHeight) / math.max(screenWidth, screenHeight)
     local sacleH = videoHight / math.min(screenWidth, screenHeight)
@@ -202,7 +203,7 @@ local function getLandscapeLocation(data)
     if (vote.landscapeWidth ~= nil and vote.landscapeHeight ~= nil and vote.landscapeX ~= nil and vote.landscapeY ~= nil) then
         return vote.landscapeX, vote.landscapeY, vote.landscapeWidth, vote.landscapeHeight
     end
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     local width = 0
     local height = 0
     local x = 0
@@ -242,10 +243,13 @@ local function setLuaViewSize(luaview, isPortrait) --设置当前容器大小
     if (luaview == nil) then
         return
     end
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     if (isPortrait) then
-        local videoWidth, videoHight = Native:getVideoSize(0)
-        luaview:frame(0, 0, math.min(screenWidth, screenHeight), videoHight)
+        local videoWidth, videoHight, y = Native:getVideoSize(0)
+        if System.android() then
+            y = 0.0
+        end
+        luaview:frame(0, y, math.min(screenWidth, screenHeight), videoHight)
     else
         luaview:frame(0, 0, math.max(screenWidth, screenHeight), math.min(screenWidth, screenHeight))
     end
@@ -425,12 +429,20 @@ local function configSize(data)
     if (System.android()) then
         dataTable.portraitPositionY = 0.65
     else
-        dataTable.portraitPositionY = 0.75
+        dataTable.portraitPositionY = 0.65
     end
     dataTable.landscapePositionY = 0.65
 end
 
 local function onCreate(args)
+    local showLinkUrl = getHotspotExposureTrackLink(args, 1)
+    if (showLinkUrl ~= nil) then
+        Native:get(showLinkUrl)
+    end
+    if (vote.launchPlanId ~= nil) then
+        osTrack(vote.launchPlanId, 1, 2)
+        osTrack(vote.launchPlanId, 2, 2)
+    end
     vote.data = args
     configSize(args)
     local isPortrait = Native:isPortraitScreen()
@@ -456,6 +468,9 @@ local function onCreate(args)
         local clickLinkUrl = getHotspotClickTrackLink(args, 1)
         if (clickLinkUrl ~= nil) then
             Native:get(clickLinkUrl)
+        end
+        if (vote.launchPlanId ~= nil) then
+            osTrack(vote.launchPlanId, 3, 2)
         end
         Native:sendAction(Native:base64Encode("LuaView://defaultLuaView?template=" .. "os_vote_window.lua" .. "&id=" .. "os_vote_window" .. tostring(vote.id) .. "&priority=2"), args)
     end)
@@ -488,10 +503,8 @@ function show(args)
         return
     end
     vote.id = args.data.id
-    local showLinkUrl = getHotspotExposureTrackLink(args.data, 1)
-    if (showLinkUrl ~= nil) then
-        Native:get(showLinkUrl)
-    end
+    vote.launchPlanId = args.data.launchPlanId
+    vote.request = HttpRequest()
     onCreate(args.data)
     getVoteCountInfo()
     getUserVoteInfo()

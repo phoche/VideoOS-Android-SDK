@@ -10,6 +10,7 @@ require "os_config"
 require "os_string"
 require "os_constant"
 require "os_util"
+require "os_track"
 redEnvelope = object:new()
 local adTypeName = "redEnvelope"
 local scale = getScale()
@@ -88,7 +89,7 @@ local function getPortraitLocation(data)
     if (redEnvelope.portraitWidth ~= nil and redEnvelope.portraitHeight ~= nil and redEnvelope.portraitX ~= nil and redEnvelope.portraitY ~= nil) then
         return redEnvelope.portraitX, redEnvelope.portraitY, redEnvelope.portraitWidth, redEnvelope.portraitHeight
     end
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     local videoWidth, videoHight = Native:getVideoSize(0)
     local sacleW = math.min(screenWidth, screenHeight) / math.max(screenWidth, screenHeight)
     local sacleH = videoHight / math.min(screenWidth, screenHeight)
@@ -131,7 +132,7 @@ local function getLandscapeLocation(data)
     if (redEnvelope.landscapeWidth ~= nil and redEnvelope.landscapeHeight ~= nil and redEnvelope.landscapeX ~= nil and redEnvelope.landscapeY ~= nil) then
         return redEnvelope.landscapeX, redEnvelope.landscapeY, redEnvelope.landscapeWidth, redEnvelope.landscapeHeight
     end
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     local width = 0
     local height = 0
     local x = 0
@@ -171,10 +172,13 @@ local function setLuaViewSize(luaview, isPortrait) --设置当前容器大小
     if (luaview == nil) then
         return
     end
-    local screenWidth, screenHeight = System.screenSize()
+    local screenWidth, screenHeight = Native:getVideoSize(2)
     if (isPortrait) then
-        local videoWidth, videoHight = Native:getVideoSize(0)
-        luaview:frame(0, 0, math.min(screenWidth, screenHeight), videoHight)
+        local videoWidth, videoHight, y = Native:getVideoSize(0)
+        if System.android() then
+            y = 0.0
+        end
+        luaview:frame(0, y, math.min(screenWidth, screenHeight), videoHight)
     else
         luaview:frame(0, 0, math.max(screenWidth, screenHeight), math.min(screenWidth, screenHeight))
     end
@@ -468,6 +472,15 @@ local function fillData(data)
 end
 
 local function onCreate(data)
+    local showLinkUrl = getHotspotExposureTrackLink(redEnvelope.data, 1)
+    if (showLinkUrl ~= nil) then
+        Native:get(showLinkUrl)
+    end
+    if (redEnvelope.launchPlanId ~= nil) then
+        osTrack(redEnvelope.launchPlanId, 1, 2)
+        osTrack(redEnvelope.launchPlanId, 2, 2)
+    end
+
     configSize(data)
     local isPortrait = Native:isPortraitScreen()
     redEnvelope.luaview = createLuaView(isPortrait)
@@ -511,6 +524,9 @@ local function onCreate(data)
         if (clickLinkUrl ~= nil) then
             Native:get(clickLinkUrl)
         end
+        if (redEnvelope.launchPlanId ~= nil) then
+            osTrack(redEnvelope.launchPlanId, 3, 2)
+        end
         Native:sendAction(Native:base64Encode("LuaView://defaultLuaView?template=" .. "os_red_envelope_window.lua" .. "&id=" .. "os_red_envelope_window" .. tostring(redEnvelope.id) .. tostring(redEnvelope.hotspotOrder) .. "&priority=" .. tostring(osInfoViewPriority)), data)
     end)
     redEnvelope.redEnvelopeFlexView:onClick(function()
@@ -519,6 +535,9 @@ local function onCreate(data)
         local clickLinkUrl = getHotspotClickTrackLink(redEnvelope.data, 1)
         if (clickLinkUrl ~= nil) then
             Native:get(clickLinkUrl)
+        end
+        if (redEnvelope.launchPlanId ~= nil) then
+            osTrack(redEnvelope.launchPlanId, 3, 2)
         end
         Native:sendAction(Native:base64Encode("LuaView://defaultLuaView?template=" .. "os_red_envelope_window.lua" .. "&id=" .. "os_red_envelope_window" .. tostring(redEnvelope.id) .. tostring(redEnvelope.hotspotOrder) .. "&priority=" .. tostring(osInfoViewPriority)), data)
     end)
@@ -546,7 +565,7 @@ function getRedEnvelopeInfo(callback)
     -- print("[LuaView] "..paramDataString)
     -- print("[LuaView] "..OS_HTTP_GET_MOBILE_QUERY)
     print("[LuaView] " .. Native:aesEncrypt(paramDataString, OS_HTTP_PUBLIC_KEY, OS_HTTP_PUBLIC_KEY))
-    local requestId = Native:post(OS_HTTP_GET_MOBILE_QUERY, {
+    local requestId = redEnvelope.request:post(OS_HTTP_GET_MOBILE_QUERY, {
         bu_id = buId,
         device_type = deviceType,
         data = Native:aesEncrypt(paramDataString, OS_HTTP_PUBLIC_KEY, OS_HTTP_PUBLIC_KEY)
@@ -571,7 +590,7 @@ function getRedEnvelopeInfo(callback)
             end
             return
         end
-    end)
+    end, redEnvelope.luaview)
     table.insert(redEnvelope.requestIds, requestId)
 end
 
@@ -581,11 +600,9 @@ function show(args)
     end
     redEnvelope.data = args.data
 
-    redEnvelope.id = args.data.id
-    local showLinkUrl = getHotspotExposureTrackLink(redEnvelope.data, 1)
-    if (showLinkUrl ~= nil) then
-        Native:get(showLinkUrl)
-    end
+    redEnvelope.id = redEnvelope.data.id
+    redEnvelope.launchPlanId = redEnvelope.data.launchPlanId
+    redEnvelope.request = HttpRequest()
     getRedEnvelopeInfo(function()
         onCreate(redEnvelope.data)
     end)
